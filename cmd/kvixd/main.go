@@ -12,7 +12,15 @@ import (
 func main() {
 	cache, err := kvix.NewInstance(context.Background(), "kvix")
 	if err != nil {
-		log.Fatalf("instance create error : %#v \n", err)
+		if err, ok := errors.AsStorageError(err); ok {
+			log.Printf("Code: %#v \n", err.Code())
+			log.Printf("Details: %#v \n", err.Details())
+			log.Printf("Error: %#v \n", err.Error())
+			log.Printf("FileName: %#v \n", err.FileName())
+			log.Printf("Offset: %#v \n", err.Offset())
+			log.Printf("Path: %#v \n", err.Path())
+			log.Printf("SegmentId: %#v \n", err.SegmentId())
+		}
 	}
 
 	defer func() {

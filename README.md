@@ -1,8 +1,8 @@
 # Kvix
 
-A key-value storage engine inspired by Bitcask architecture, designed for
-applications. Kvix combines an in-memory index with append-only file storage to
-deliver predictable O(1) performance.
+A key-value storage engine inspired by Bitcask architecture. Kvix combines an
+in-memory index with append-only file storage to deliver predictable O(1)
+performance.
 
 ## Core Components
 

@@ -1,5 +1,3 @@
-// Package logger provides a centralized and configurable logging utility
-// based on the `go.uber.org/zap` library.
 package logger
 
 import (
@@ -9,8 +7,6 @@ import (
 	"go.uber.org/zap/zapcore"
 )
 
-// It sets up a production-ready logger with JSON encoding, ISO8601 timestamps,
-// and includes service name and process ID as initial fields.
 func New(service string, outputPaths ...string) *zap.SugaredLogger {
 	encoderCfg := zap.NewProductionEncoderConfig()
 

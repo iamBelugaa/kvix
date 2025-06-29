@@ -1,4 +1,3 @@
-// Package seginfo provides utilities for managing sequential segment files in a file-based storage system.
 package seginfo
 
 import (
@@ -13,15 +12,10 @@ import (
 	"github.com/iamBelugaa/kvix/pkg/filesys"
 )
 
-// GetLastSegmentInfo discovers and analyzes the most recent segment file in the specified directory.
 func GetLastSegmentInfo(segmentDir, prefix string) (uint16, os.FileInfo, error) {
-	if segmentDir == "" || prefix == "" {
-		return 0, nil, fmt.Errorf("all parameters (segmentDir, prefix) must be non-empty")
-	}
-
 	lastSegmentPath, err := GetLastSegmentName(segmentDir, prefix)
 	if err != nil {
-		return 0, nil, fmt.Errorf("failed to discover latest segment: %w", err)
+		return 0, nil, err
 	}
 
 	if lastSegmentPath == "" {
@@ -30,29 +24,27 @@ func GetLastSegmentInfo(segmentDir, prefix string) (uint16, os.FileInfo, error) 
 
 	segmentID, err := ParseSegmentID(lastSegmentPath, prefix)
 	if err != nil {
-		return 0, nil, fmt.Errorf("failed to parse segment ID from %s: %w", lastSegmentPath, err)
+		return 0, nil, err
 	}
 
-	fileInfo, err := getFileInfo(lastSegmentPath)
+	file, err := os.OpenFile(lastSegmentPath, os.O_RDONLY, 0644)
 	if err != nil {
-		return 0, nil, fmt.Errorf("failed to retrieve file info for %s: %w", lastSegmentPath, err)
+		return 0, nil, err
 	}
 
-	return segmentID, fileInfo, nil
+	stat, err := file.Stat()
+	if err != nil {
+		return 0, nil, fmt.Errorf("failed to get file info for %s: %w", lastSegmentPath, err)
+	}
+
+	return segmentID, stat, nil
 }
 
-// GetLastSegmentName searches the segment directory and identifies the file with the highest sequence ID.
 func GetLastSegmentName(segmentDir, prefix string) (string, error) {
-	if segmentDir == "" || prefix == "" {
-		return "", fmt.Errorf("all parameters (segmentDir, prefix) must be non-empty")
-	}
-
-	// Example: "/var/data/segments/segment_*.seg"
 	searchPattern := filepath.Join(segmentDir, prefix+"*.seg")
-
 	matchingFiles, err := filesys.ReadDir(searchPattern)
 	if err != nil {
-		return "", fmt.Errorf("failed to read segment directory with pattern %s: %w", searchPattern, err)
+		return "", err
 	}
 
 	if len(matchingFiles) == 0 {
@@ -63,7 +55,6 @@ func GetLastSegmentName(segmentDir, prefix string) (string, error) {
 	return matchingFiles[len(matchingFiles)-1], nil
 }
 
-// ParseSegmentID extracts the sequence ID from a segment filename.
 func ParseSegmentID(fullPath, prefix string) (uint16, error) {
 	_, filename := filepath.Split(fullPath)
 
@@ -71,40 +62,33 @@ func ParseSegmentID(fullPath, prefix string) (uint16, error) {
 		return 0, fmt.Errorf("filename %s does not start with expected prefix %s", filename, prefix)
 	}
 
-	// Example: "segment_00001_1678881234567890.seg" -> "00001_1678881234567890"
 	withoutPrefix := strings.TrimPrefix(filename, prefix)
 	withoutExtension := strings.Split(withoutPrefix, ".")[0]
 
-	// Example: "00001_1678881234567890" -> ["", "00001", "1678881234567890"]
 	parts := strings.Split(withoutExtension, "_")
-
-	// We expect: ["", "ID", "timestamp"] (empty first element due to leading underscore).
 	if len(parts) < 3 {
 		return 0, fmt.Errorf("filename %s has unexpected format, expected prefix_ID_timestamp.seg", filename)
 	}
 
-	id, err := strconv.ParseUint(parts[1], 10, 64)
+	id, err := strconv.Atoi(parts[1])
 	if err != nil {
-		return 0, fmt.Errorf("failed to parse segment ID '%s' as integer: %w", parts[1], err)
+		return 0, err
 	}
 
 	return uint16(id), nil
 }
 
-// GenerateName creates a properly formatted filename for a new segment file.
 func GenerateName(id uint16, prefix string) string {
 	return GenerateNameWithTimestamp(id, prefix, time.Now().UnixNano())
 }
 
-// GenerateNameWithTimestamp creates a properly formatted filename using a specific timestamp.
 func GenerateNameWithTimestamp(id uint16, prefix string, timestamp int64) string {
 	if prefix == "" {
-		return fmt.Sprintf("INVALID_PREFIX_%05d_%d.seg", id, timestamp)
+		return ""
 	}
 	return fmt.Sprintf("%s_%05d_%d.seg", prefix, id, timestamp)
 }
 
-// ParseSegmentTimestamp extracts the timestamp from a segment filename.
 func ParseSegmentTimestamp(fullPath, prefix string) (int64, error) {
 	_, filename := filepath.Split(fullPath)
 
@@ -112,42 +96,17 @@ func ParseSegmentTimestamp(fullPath, prefix string) (int64, error) {
 		return 0, fmt.Errorf("filename %s does not start with expected prefix %s", filename, prefix)
 	}
 
-	// Example: "segment_00001_1678881234567890.seg" -> "00001_1678881234567890"
 	withoutPrefix := strings.TrimPrefix(filename, prefix)
 	withoutExtension := strings.Split(withoutPrefix, ".")[0]
 
-	// Example: "00001_1678881234567890" -> ["", "00001", "1678881234567890"]
 	parts := strings.Split(withoutExtension, "_")
-
-	// We expect: ["", "ID", "timestamp"] (empty first element due to leading underscore).
 	if len(parts) < 3 {
 		return 0, fmt.Errorf("filename %s has unexpected format, expected prefix_ID_timestamp.seg", filename)
 	}
 
-	timestamp, err := strconv.ParseInt(parts[2], 10, 64)
+	timestamp, err := strconv.Atoi(parts[2])
 	if err != nil {
-		return 0, fmt.Errorf("failed to parse segment timestamp '%s' as integer: %w", parts[2], err)
+		return 0, err
 	}
-	return timestamp, nil
-}
-
-// getFileInfo safely retrieves file system metadata for a given path.
-func getFileInfo(filePath string) (os.FileInfo, error) {
-	file, err := os.OpenFile(filePath, os.O_RDONLY, 0644)
-	if err != nil {
-		return nil, fmt.Errorf("failed to open file %s: %w", filePath, err)
-	}
-
-	defer func() {
-		if closeErr := file.Close(); closeErr != nil {
-			fmt.Printf("Warning: failed to close file %s: %v\n", filePath, closeErr)
-		}
-	}()
-
-	stat, err := file.Stat()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get file info for %s: %w", filePath, err)
-	}
-
-	return stat, nil
+	return int64(timestamp), nil
 }

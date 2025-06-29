@@ -14,14 +14,12 @@ import (
 )
 
 var (
-	ErrNilHeader       = stdErrors.New("nil header")       // Indicates a nil EntryHeader struct.
-	ErrNilValue        = stdErrors.New("nil value")        // Indicates a nil []byte in ErrNilValue.
-	ErrInvalidChecksum = stdErrors.New("invalid checksum") // Indicates checksum mismatch during validation.
-	ErrNilKey          = stdErrors.New("nil key")          // Occurs when attempting to process a nil Entry struct.
+	ErrNilKey          = stdErrors.New("nil key")
+	ErrNilValue        = stdErrors.New("nil value")
+	ErrNilHeader       = stdErrors.New("nil header")
+	ErrInvalidChecksum = stdErrors.New("invalid checksum")
 )
 
-// Storage represents the core file-based storage component responsible for managing segment files
-// and handling data persistence operations.
 type Storage struct {
 	options                *options.Options
 	log                    *zap.SugaredLogger
@@ -33,28 +31,19 @@ type Storage struct {
 	segmentPool            *segmentpool.SegmentPool
 }
 
-// Record represents a complete key-value entry as it exists in our storage system.
 type Record struct {
-	// Header contains all metadata about this record including size information,
-	// version details, and integrity checksums.
 	Header *RecordHeader
-
-	// Key holds the user-provided key data as raw bytes.
-	Key []byte
-
-	// Value contains the user-provided value data as raw bytes.
-	Value []byte
+	Key    []byte
+	Value  []byte
 }
 
-// RecordHeader contains essential metadata for each stored record.
 type RecordHeader struct {
-	Checksum    uint32 // Checksum provides data integrity verification using CRC32 algorithm.
-	PayloadSize uint32 // Size of the protobuf payload.
-	Timestamp   int64  // Timestamp records when this record was created.
-	Version     uint8  // Version enables forward and backward compatibility as the storage format evolves.
+	Checksum    uint32
+	PayloadSize uint32
+	Timestamp   int64
+	Version     uint8
 }
 
-// Serializes a record to its Protocol Buffer representation.
 func (r *Record) MarshalProto() ([]byte, error) {
 	record := kvixpb.Record{
 		Key:   r.Key,
@@ -64,7 +53,6 @@ func (r *Record) MarshalProto() ([]byte, error) {
 	return opts.Marshal(&record)
 }
 
-// Deserializes a record from its Protocol Buffer representation.
 func (r *Record) UnMarshalProto(data []byte) error {
 	var record kvixpb.Record
 	opts := proto.UnmarshalOptions{DiscardUnknown: true}

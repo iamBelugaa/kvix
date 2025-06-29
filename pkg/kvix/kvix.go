@@ -1,4 +1,3 @@
-// Package kvix provides a key-value data store designed for fast read and write operations.
 package kvix
 
 import (
@@ -9,18 +8,19 @@ import (
 
 	"github.com/iamBelugaa/kvix/internal/engine"
 	"github.com/iamBelugaa/kvix/internal/storage"
+	"github.com/iamBelugaa/kvix/pkg/errors"
 	"github.com/iamBelugaa/kvix/pkg/logger"
 	"github.com/iamBelugaa/kvix/pkg/options"
+	"go.uber.org/zap"
 )
 
-// Instance represents a complete Kvix key-value database instance.
 type Instance struct {
 	mu      sync.RWMutex
 	engine  *engine.Engine
 	options *options.Options
+	log     *zap.SugaredLogger
 }
 
-// NewInstance creates and initializes a new Kvix database instance with the specified configuration.
 func NewInstance(context context.Context, service string, opts ...options.OptionFunc) (*Instance, error) {
 	log := logger.New(service)
 
@@ -33,7 +33,7 @@ func NewInstance(context context.Context, service string, opts ...options.Option
 
 	eng, err := engine.New(context, log, &defaultOpts)
 	if err != nil {
-		return nil, fmt.Errorf("failed to initialize database engine: %w", err)
+		return nil, fmt.Errorf("failed to initialize kvix: %w", err)
 	}
 
 	log.Infow(
@@ -43,17 +43,18 @@ func NewInstance(context context.Context, service string, opts ...options.Option
 		"maxSegmentSize", defaultOpts.SegmentOptions.Size,
 	)
 
-	return &Instance{engine: eng, options: &defaultOpts}, nil
+	return &Instance{engine: eng, options: &defaultOpts, log: log}, nil
 }
 
-// Set stores a key-value pair in the database with immediate durability.
 func (i *Instance) Set(context context.Context, key []byte, value []byte) error {
+	i.log.Infow("Set request received", "key", string(key))
+
 	if err := isValidKey(key); err != nil {
-		return fmt.Errorf("invalid key: %w", err)
+		return err
 	}
 
 	if err := isValidValue(value); err != nil {
-		return fmt.Errorf("invalid value: %w", err)
+		return err
 	}
 
 	i.mu.Lock()
@@ -61,18 +62,21 @@ func (i *Instance) Set(context context.Context, key []byte, value []byte) error 
 	return i.engine.Set(context, key, value)
 }
 
-// SetX stores a key-value pair with automatic expiration after the specified duration.
 func (i *Instance) SetX(context context.Context, key []byte, value []byte, ttl time.Duration) error {
+	i.log.Infow("SetX request received", "key", string(key))
+
 	if err := isValidKey(key); err != nil {
-		return fmt.Errorf("invalid key: %w", err)
+		return err
 	}
 
 	if err := isValidValue(value); err != nil {
-		return fmt.Errorf("invalid value: %w", err)
+		return err
 	}
 
 	if ttl <= 0 {
-		return fmt.Errorf("TTL must be positive, got %v", ttl)
+		return errors.NewValidationError(
+			nil, errors.ErrValidationInvalidData, fmt.Sprintf("ttl must be positive, got %v", ttl),
+		)
 	}
 
 	i.mu.Lock()
@@ -82,10 +86,11 @@ func (i *Instance) SetX(context context.Context, key []byte, value []byte, ttl t
 	return err
 }
 
-// Get retrieves the value associated with the given key, if it exists and hasn't expired.
 func (i *Instance) Get(context context.Context, key []byte) (*storage.Record, error) {
+	i.log.Infow("Get request received", "key", string(key))
+
 	if err := isValidKey(key); err != nil {
-		return nil, fmt.Errorf("invalid key: %w", err)
+		return nil, err
 	}
 
 	i.mu.RLock()
@@ -93,10 +98,11 @@ func (i *Instance) Get(context context.Context, key []byte) (*storage.Record, er
 	return i.engine.Get(context, key)
 }
 
-// Exists checks whether a key exists in the database without retrieving the full record.
 func (i *Instance) Exists(context context.Context, key []byte) (bool, error) {
+	i.log.Infow("Exists request received", "key", string(key))
+
 	if err := isValidKey(key); err != nil {
-		return false, fmt.Errorf("invalid key: %w", err)
+		return false, err
 	}
 
 	i.mu.RLock()
@@ -104,10 +110,11 @@ func (i *Instance) Exists(context context.Context, key []byte) (bool, error) {
 	return i.engine.Exists(context, key)
 }
 
-// Delete removes a key-value pair from the database.
 func (i *Instance) Delete(context context.Context, key []byte) (bool, error) {
+	i.log.Infow("Delete request received", "key", string(key))
+
 	if err := isValidKey(key); err != nil {
-		return false, fmt.Errorf("invalid key: %w", err)
+		return false, err
 	}
 
 	i.mu.Lock()
@@ -115,8 +122,9 @@ func (i *Instance) Delete(context context.Context, key []byte) (bool, error) {
 	return i.engine.Delete(context, key)
 }
 
-// Close gracefully shuts down the Kvix database instance.
 func (i *Instance) Close() error {
+	i.log.Infow("Close request received")
+
 	i.mu.Lock()
 	defer i.mu.Unlock()
 	return i.engine.Close()

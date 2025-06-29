@@ -2,6 +2,8 @@
 package options
 
 import (
+	"fmt"
+	"math"
 	"strings"
 	"time"
 )
@@ -103,4 +105,27 @@ func WithSegmentSize(size uint64) OptionFunc {
 			o.SegmentOptions.Size = size
 		}
 	}
+}
+
+// FormatBytes converts byte count to human-readable format for error messages.
+func FormatBytes(bytes uint64) string {
+	const unit = 1024
+	var units = []string{"B", "KB", "MB", "GB", "TB"}
+
+	if bytes < unit {
+		return fmt.Sprintf("%d B", bytes)
+	}
+
+	exp := 0
+	value := float64(bytes)
+
+	for value >= unit && exp < len(units)-1 {
+		value /= unit
+		exp++
+	}
+
+	if math.Abs(value-math.Round(value)) < 0.01 {
+		return fmt.Sprintf("%.0f %s", math.Round(value), units[exp])
+	}
+	return fmt.Sprintf("%.2f %s", value, units[exp])
 }

@@ -194,6 +194,73 @@ func (s *Storage) Set(ctx context.Context, key, value []byte) (*Record, int64, e
 	return record, recordOffset, nil
 }
 
+// VerifyChecksum validates the integrity of a stored record by recalculating
+// its checksum and comparing it against the stored checksum value.
+func (s *Storage) VerifyChecksum(record *Record) (bool, error) {
+	encoded, err := record.MarshalProto()
+	if err != nil {
+		return false, errors.NewStorageError(
+			err, errors.ErrRecordSerialization, "Failed to marshal payload for checksum verification",
+		).
+			WithDetail("record", record)
+	}
+
+	if s.checksummer.Verify(encoded, record.Header.Checksum) {
+		return true, nil
+	}
+
+	return false, errors.NewValidationError(
+		ErrInvalidChecksum, errors.ErrRecordChecksumMismatch, "Invalid checksum",
+	)
+}
+
+// Close gracefully shuts down the storage system, ensuring all buffered data is written
+// to disk and all resources are properly released.
+func (s *Storage) Close() error {
+	s.log.Infow("Closing storage system")
+
+	var currentFileName string
+	var currentFilePath string
+	if stat, err := s.activeSegment.Stat(); err == nil {
+		currentFileName = stat.Name()
+		currentFilePath = filepath.Join(s.options.SegmentOptions.Directory, currentFileName)
+	}
+
+	if err := s.activeSegment.Sync(); err != nil {
+		s.log.Errorw(
+			"Failed to sync file before closing",
+			"error", err,
+			"fileName", currentFileName,
+			"filePath", currentFilePath,
+		)
+
+		if closeErr := s.activeSegment.Close(); closeErr != nil {
+			s.log.Errorw(
+				"Failed to close file after sync error",
+				"syncError", err,
+				"closeError", closeErr,
+				"fileName", currentFileName,
+				"filePath", currentFilePath,
+			)
+		}
+
+		return errors.ClassifySyncError(err, currentFileName, currentFilePath)
+	}
+
+	if err := s.activeSegment.Close(); err != nil {
+		return errors.NewStorageError(
+			err, errors.ErrSegmentCloseFailed, "Failed to close segment file handle",
+		).
+			WithPath(currentFilePath).
+			WithFileName(currentFileName)
+	}
+
+	s.activeSegment = nil
+	s.log.Infow("Storage system closed successfully", "fileName", currentFileName, "filePath", currentFilePath)
+
+	return nil
+}
+
 // Handles the complex process of opening a segment file for writing.
 func (s *Storage) openSegmentFile(segmentID uint16, timestamp int64, isNewSegment bool) (*os.File, error) {
 	fileName := seginfo.GenerateNameWithTimestamp(segmentID, s.options.SegmentOptions.Prefix, timestamp)

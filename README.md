@@ -46,7 +46,8 @@ type RecordPointer struct {
     Offset           int64   // 8 bytes: Exact position in segment file
     SegmentTimestamp int64   // 8 bytes: Creation time for filename reconstruction
     SegmentID        uint16  // 2 bytes: Segment identifier (0-65535)
-    // 6 bytes of padding added by Go for alignment = 32 bytes total
+
+    // 6 Bytes of padding added by Go for alignment = 32 bytes total
 }
 ```
 
@@ -105,26 +106,6 @@ func (i *Instance) SetX(ctx context.Context, key []byte, value []byte, ttl time.
 
 Stores a key-value pair with automatic expiration after the specified duration.
 Ideal for implementing caches, session stores, and time-sensitive data.
-
-```go
-// Store session data with 30-minute expiration
-sessionData := []byte(`{
-    "user_id": "usr_1234567890",
-    "session_token": "sess_abcdef123456",
-    "permissions": ["read", "write", "admin"],
-    "created_at": "2025-01-15T10:30:00Z",
-    "last_activity": "2025-01-15T10:30:00Z"
-}`)
-
-err := db.SetX(ctx, []byte("session:sess_abcdef123456"), sessionData, 30*time.Minute)
-if err != nil {
-    return fmt.Errorf("failed to store session: %w", err)
-}
-
-// Store API rate limit counters with hourly reset
-counter := []byte("147") // 147 requests made this hour
-err = db.SetX(ctx, []byte("ratelimit:user:usr_1234567890"), counter, time.Hour)
-```
 
 #### `Get`
 
@@ -221,16 +202,16 @@ type SessionStore struct {
 type SessionData struct {
     UserID      string                 `json:"user_id"`
     Permissions []string               `json:"permissions"`
-    Data        map[string]any `json:"data"`
-    CreatedAt   time.Time             `json:"created_at"`
-    LastAccess  time.Time             `json:"last_access"`
+    Data        map[string]any         `json:"data"`
+    CreatedAt   time.Time              `json:"created_at"`
+    LastAccess  time.Time              `json:"last_access"`
 }
 
 func NewSessionStore(dataDir string) (*SessionStore, error) {
     db, err := ignite.NewInstance(context.Background(), "session-store",
         ignite.WithDataDir(dataDir),
-        ignite.WithSegmentSize(1024*1024*1024), // 1GB segments
         ignite.WithSegmentPrefix("sessions"),
+        ignite.WithSegmentSize(1024*1024*1024), // 1GB segments
     )
     if err != nil {
         return nil, fmt.Errorf("failed to initialize session store: %w", err)
@@ -240,7 +221,7 @@ func NewSessionStore(dataDir string) (*SessionStore, error) {
 }
 
 func (s *SessionStore) CreateSession(ctx context.Context, userID string, permissions []string) (string, error) {
-    sessionID := generateSecureSessionID() // Implementation not shown
+    sessionID := generateSecureSessionID()
 
     sessionData := SessionData{
         UserID:      userID,
@@ -256,7 +237,6 @@ func (s *SessionStore) CreateSession(ctx context.Context, userID string, permiss
     }
 
     key := []byte("session:" + sessionID)
-    // Store with 24-hour expiration
     err = s.db.SetX(ctx, key, encoded, 24*time.Hour)
     if err != nil {
         return "", fmt.Errorf("failed to store session: %w", err)
@@ -281,10 +261,8 @@ func (s *SessionStore) GetSession(ctx context.Context, sessionID string) (*Sessi
         return nil, fmt.Errorf("failed to decode session data: %w", err)
     }
 
-    // Update last access time
     session.LastAccess = time.Now()
     if err := s.updateSession(ctx, sessionID, &session); err != nil {
-        // Log warning but don't fail the read operation
         log.Printf("Warning: failed to update session access time: %v", err)
     }
 

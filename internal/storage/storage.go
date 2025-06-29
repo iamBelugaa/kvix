@@ -3,8 +3,10 @@
 package storage
 
 import (
+	"bytes"
 	"context"
 	"encoding/binary"
+	stdErrors "errors"
 	"fmt"
 	"io"
 	"os"
@@ -194,6 +196,185 @@ func (s *Storage) Set(ctx context.Context, key, value []byte) (*Record, int64, e
 	return record, recordOffset, nil
 }
 
+// Get retrieves a record from the storage system starting at the specified offset.
+func (s *Storage) Get(
+	ctx context.Context, key []byte, segmentID uint16, segmentTimestamp int64, offset int64,
+) (record *Record, err error) {
+	s.log.Infow("Starting Get operation", "requestedKey", string(key), "readOffset", offset)
+
+	// Only manage append position for active segment reads.
+	isActiveSegment := segmentID == s.activeSegmentID
+	if isActiveSegment {
+		defer func() {
+			if e := s.ensureAppendPosition(); e != nil {
+				err = e
+			}
+		}()
+	}
+
+	var segmentFile *os.File
+	if isActiveSegment {
+		segmentFile = s.activeSegment
+		s.log.Infow("Reading from active segment", "segmentID", segmentID)
+	} else {
+		segmentFile, err = s.segmentPool.GetSegmentHandle(segmentID, segmentTimestamp)
+		if err != nil {
+			return nil, err
+		}
+		s.log.Infow("Retrieved segment from pool", "segmentID", segmentID)
+	}
+
+	// Step 1: Read the binary header from the segment file.
+	var header RecordHeader
+	headerSize := int64(binary.Size(header))
+
+	s.log.Infow("Reading header", "headerSize", headerSize, "offset", offset)
+	headerReader := io.NewSectionReader(segmentFile, offset, headerSize)
+
+	if err := binary.Read(headerReader, binary.LittleEndian, &header); err != nil {
+		if stdErrors.Is(err, io.EOF) {
+			return nil, errors.NewStorageError(
+				err, errors.ErrSegmentUnexpectedEOF, "Reached end of file while reading record header",
+			).
+				WithDetail("offset", offset).
+				WithSegmentID(int(s.activeSegmentID))
+		}
+
+		return nil, errors.NewStorageError(
+			err, errors.ErrRecordHeaderReadFailed,
+			"Failed to read record header from segment file",
+		).
+			WithDetail("offset", offset).
+			WithDetail("headerSize", headerSize).
+			WithSegmentID(int(s.activeSegmentID))
+	}
+
+	s.log.Infow(
+		"Header read successfully",
+		"version", header.Version,
+		"checksum", header.Checksum,
+		"timestamp", header.Timestamp,
+		"payloadSize", header.PayloadSize,
+	)
+
+	// Step 2: Validate header fields for basic sanity checks.
+	if header.PayloadSize == 0 {
+		return nil, errors.NewValidationError(
+			nil, errors.ErrValidationInvalidData, "Record header contains zero payload size",
+		).
+			WithDetail("header", header).
+			WithDetail("offset", offset)
+	}
+
+	if header.PayloadSize > options.MaxValueSize {
+		return nil, errors.NewValidationError(
+			nil, errors.ErrRecordPayloadTooLarge,
+			fmt.Sprintf(
+				"Payload size %s exceeds maximum allowed size %s",
+				options.FormatBytes(uint64(header.PayloadSize)), options.FormatBytes(uint64(options.MaxValueSize)),
+			),
+		).
+			WithDetail("offset", offset).
+			WithDetail("payloadSize", header.PayloadSize)
+	}
+
+	if header.Version < options.MinSchemaVersion || header.Version > options.MaxSchemaVersion {
+		return nil, errors.NewValidationError(
+			nil, errors.ErrSystemUnsupportedVersion, "Unsupported schema version",
+		).
+			WithDetail("version", header.Version).
+			WithDetail("minVersion", options.MinSchemaVersion).
+			WithDetail("maxSchemaVersion", options.MaxSchemaVersion)
+	}
+
+	// Step 3: Read the protobuf payload.
+	var payloadBuffer []byte
+	payloadOffset := offset + headerSize
+	payloadSize := int64(header.PayloadSize)
+
+	s.log.Infow(
+		"payloadSize", payloadSize,
+		"payloadOffset", payloadOffset,
+		"Reading payload using stored size",
+	)
+
+	// Small payloads (< 1MB): Direct allocation and read for minimal overhead.
+	// Large payloads (>= 1MB): Section reader for memory efficiency.
+	if payloadSize < 1048576 {
+		payloadBuffer, err = s.readSmallPayload(segmentFile, payloadOffset, payloadSize)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		payloadSectionReader := io.NewSectionReader(segmentFile, payloadOffset, payloadSize)
+		payloadBuffer, err = s.readLargePayloadWithBuffer(payloadSectionReader, payloadSize)
+		if err != nil {
+			if stdErrors.Is(err, io.EOF) || stdErrors.Is(err, io.ErrUnexpectedEOF) {
+				return nil, errors.NewStorageError(
+					err, errors.ErrSegmentUnexpectedEOF, "Reached end of file while reading record payload",
+				).
+					WithDetail("offset", payloadOffset).
+					WithSegmentID(int(s.activeSegmentID)).
+					WithDetail("expectedBytes", payloadSize)
+			}
+
+			return nil, errors.NewStorageError(
+				err, errors.ErrRecordPayloadReadFailed, "Failed to read record payload.",
+			).
+				WithDetail("offset", payloadOffset).
+				WithSegmentID(int(s.activeSegmentID)).
+				WithDetail("payloadSize", payloadSize)
+		}
+	}
+
+	s.log.Infow("Payload read successfully using efficient strategy", "bytesRead", len(payloadBuffer))
+
+	// Step 4: Deserialize the protobuf payload back into a Record structure.
+	record = &Record{Header: &header}
+	if err := record.UnMarshalProto(payloadBuffer); err != nil {
+		return nil, errors.NewStorageError(
+			err, errors.ErrRecordDeserialization,
+			"Failed to deserialize record from protobuf payload",
+		).
+			WithDetail("offset", offset).
+			WithSegmentID(int(s.activeSegmentID)).
+			WithDetail("payloadSize", len(payloadBuffer))
+	}
+
+	s.log.Infow("Record reconstructed successfully", "keyLength", len(record.Key), "valueLength", len(record.Value))
+
+	// Step 5: Validate that the deserialized record matches our expectations.
+	if !bytes.Equal(record.Key, key) {
+		return nil, errors.NewValidationError(
+			nil, errors.ErrRecordKeyMismatch, "Retrieved key does not match requested key",
+		).
+			WithDetail("offset", offset).
+			WithDetail("requestedKey", string(key)).
+			WithDetail("retrievedKey", string(record.Key))
+	}
+
+	// Step 6: Verify data integrity using checksum validation.
+	if isValid, err := s.VerifyChecksum(record); err != nil {
+		return nil, err
+	} else if !isValid {
+		return nil, errors.NewValidationError(
+			ErrInvalidChecksum, errors.ErrRecordChecksumMismatch,
+			"Record checksum validation failed - data may be corrupted",
+		).
+			WithDetail("offset", offset).
+			WithDetail("storedChecksum", record.Header.Checksum)
+	}
+
+	s.log.Infow(
+		"Get operation completed successfully",
+		"keyLength", len(record.Key),
+		"valueLength", len(record.Value),
+		"payloadSize", record.Header.PayloadSize,
+	)
+
+	return record, nil
+}
+
 // VerifyChecksum validates the integrity of a stored record by recalculating
 // its checksum and comparing it against the stored checksum value.
 func (s *Storage) VerifyChecksum(record *Record) (bool, error) {
@@ -311,6 +492,22 @@ func (s *Storage) openSegmentFile(segmentID uint16, timestamp int64, isNewSegmen
 	return file, nil
 }
 
+// After any read/open operation, ensure file pointer is positioned for next append.
+func (s *Storage) ensureAppendPosition() error {
+	offset, err := s.activeSegment.Seek(0, io.SeekEnd)
+	if err != nil {
+		return errors.NewStorageError(
+			err, errors.ErrIOSeekFailed, "Failed to position file pointer for append operations",
+		).
+			WithDetail("seekOffset", 0).
+			WithDetail("whence", io.SeekEnd).
+			WithFileName(s.activeSegment.Name())
+	}
+
+	s.log.Infow("File pointer positioned for append operations", "appendOffset", offset)
+	return nil
+}
+
 // Transforms a raw Record into a structured Record ready for storage.
 func (s *Storage) prepareRecord(key, value []byte) (*Record, []byte, error) {
 	s.log.Infow("Preparing record", "keyLength", len(key), "valueLength", len(value))
@@ -402,4 +599,66 @@ func (s *Storage) writeRecord(record *Record, encoded []byte) (int, error) {
 	)
 
 	return totalSize, nil
+}
+
+// readSmallPayload handles payloads under 1MB with minimal overhead.
+func (s *Storage) readSmallPayload(file *os.File, offset, size int64) ([]byte, error) {
+	buffer := make([]byte, size)
+
+	n, err := file.ReadAt(buffer, offset)
+	if err != nil {
+		if stdErrors.Is(err, io.EOF) && int64(n) == size {
+			return buffer, nil
+		}
+		return nil, errors.NewStorageError(
+			err, errors.ErrRecordPayloadReadFailed, "Failed to read small payload",
+		).
+			WithDetail("actualBytes", n).
+			WithDetail("offset", offset).
+			WithDetail("expectedBytes", size)
+	}
+
+	if int64(n) != size {
+		return nil, errors.NewStorageError(
+			nil, errors.ErrRecordPayloadReadFailed, "Incomplete read of small payload",
+		).
+			WithDetail("actualBytes", n).
+			WithDetail("offset", offset).
+			WithDetail("expectedBytes", size)
+	}
+
+	return buffer, nil
+}
+
+// readLargePayloadWithBuffer implements buffer based reading for all payload sizes using bytes.Buffer.
+func (s *Storage) readLargePayloadWithBuffer(reader io.Reader, expectedSize int64) ([]byte, error) {
+	var buf bytes.Buffer
+	buf.Grow(int(expectedSize))
+
+	s.log.Infow(
+		"Using buffer-based reading strategy",
+		"expectedSize", expectedSize,
+		"initialCapacity", buf.Cap(),
+		"approach", "predictive_growth",
+	)
+
+	copied, err := io.Copy(&buf, reader)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read payload with buffer approach: %w", err)
+	}
+
+	if copied != expectedSize {
+		return nil, fmt.Errorf("payload size mismatch with buffer strategy: expected %d bytes, got %d", expectedSize, copied)
+	}
+
+	s.log.Infow(
+		"Buffer based reading completed successfully with optimal memory utilization",
+		"bytesRead", copied,
+		"finalBufferSize", buf.Len(),
+		"finalBufferCapacity", buf.Cap(),
+		"allocationOverhead", buf.Cap()-buf.Len(),
+		"memoryEfficiency", float64(buf.Len())/float64(buf.Cap())*100,
+	)
+
+	return buf.Bytes(), nil
 }

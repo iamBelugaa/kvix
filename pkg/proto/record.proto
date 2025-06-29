@@ -1,0 +1,20 @@
+syntax = "proto3";
+
+package ignitedb.storage.v1;
+
+// Go package path for generated code.
+option go_package = "github.com/iamNilotpal/ignite;ignitepb";
+
+// Record represents a complete key-value entry as it exists in our storage system.
+message Record {
+  bytes key = 1;   // Key holds the user-provided key data as raw bytes.
+  bytes value = 2; // Value contains the user-provided value data as raw bytes.
+}
+
+// RecordHeader contains essential metadata for each stored record.
+message RecordHeader {
+  uint32 checksum = 1;     // Checksum provides data integrity verification using CRC32 algorithm.
+  uint32 payload_size = 2; // PayloadSize specifies the exact length of the protobuf payload in bytes.
+  uint32 version = 3;      // Version enables forward and backward compatibility as the storage format evolves.
+  int64 timestamp = 4;     // Timestamp records when this record was created, stored as nanoseconds since Unix epoch.
+}

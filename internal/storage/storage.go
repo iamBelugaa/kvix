@@ -4,6 +4,8 @@ package storage
 
 import (
 	"context"
+	"encoding/binary"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -150,6 +152,48 @@ func (s *Storage) SegmentTimestamp() int64 {
 	return s.activeSegmentCreatedAt
 }
 
+// Set stores a key-value pair in the storage system, returning the created record.
+func (s *Storage) Set(ctx context.Context, key, value []byte) (*Record, int64, error) {
+	s.log.Infow(
+		"Starting optimized Set operation",
+		"keyLength", len(key),
+		"valueLength", len(value),
+		"currentOffset", s.currentOffset,
+	)
+
+	recordOffset := s.currentOffset
+	s.log.Infow(
+		"Record will be written at tracked offset",
+		"offset", recordOffset,
+		"segmentID", s.activeSegmentID,
+	)
+
+	record, encoded, err := s.prepareRecord(key, value)
+	if err != nil {
+		return nil, 0, errors.NewStorageError(
+			err, errors.ErrRecordPreparationFailed, "Failed to prepare record for storage",
+		).
+			WithFileName(s.activeSegment.Name()).
+			WithSegmentID(int(s.activeSegmentID)).
+			WithPath(s.options.SegmentOptions.Directory)
+	}
+
+	bytesWritten, err := s.writeRecord(record, encoded)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	s.currentOffset += int64(bytesWritten)
+	s.log.Infow(
+		"Set operation completed with offset tracking",
+		"recordOffset", recordOffset,
+		"segmentID", s.activeSegmentID,
+		"newCurrentOffset", s.currentOffset,
+	)
+
+	return record, recordOffset, nil
+}
+
 // Handles the complex process of opening a segment file for writing.
 func (s *Storage) openSegmentFile(segmentID uint16, timestamp int64, isNewSegment bool) (*os.File, error) {
 	fileName := seginfo.GenerateNameWithTimestamp(segmentID, s.options.SegmentOptions.Prefix, timestamp)
@@ -198,4 +242,97 @@ func (s *Storage) openSegmentFile(segmentID uint16, timestamp int64, isNewSegmen
 	)
 
 	return file, nil
+}
+
+// Transforms a raw Record into a structured Record ready for storage.
+func (s *Storage) prepareRecord(key, value []byte) (*Record, []byte, error) {
+	s.log.Infow("Preparing record", "keyLength", len(key), "valueLength", len(value))
+
+	record := &Record{
+		Key:   key,
+		Value: value,
+		Header: &RecordHeader{
+			Version:   1,
+			Timestamp: time.Now().Unix(),
+		},
+	}
+
+	encoded, err := record.MarshalProto()
+	if err != nil {
+		return nil, nil, errors.NewStorageError(
+			err, errors.ErrRecordSerialization, "Failed to marshal payload",
+		).
+			WithDetail("record", record)
+	}
+
+	record.Header.PayloadSize = uint32(len(encoded))
+	record.Header.Checksum = s.checksummer.Calculate(encoded)
+
+	s.log.Infow(
+		"Record prepared successfully",
+		"version", record.Header.Version,
+		"checksum", record.Header.Checksum,
+		"payloadSize", record.Header.PayloadSize,
+	)
+
+	return record, encoded, nil
+}
+
+// writeRecord performs the low-level operation of writing a prepared record
+// to the segment's underlying writer.
+func (s *Storage) writeRecord(record *Record, encoded []byte) (int, error) {
+	s.log.Infow(
+		"Writing record to active segment",
+		"actualPayloadLength", len(encoded),
+		"binaryHeaderSize", binary.Size(record.Header),
+		"headerPayloadSize", record.Header.PayloadSize,
+	)
+
+	headerSize := binary.Size(record.Header)
+	totalSize := headerSize + len(encoded)
+
+	if err := binary.Write(s.activeSegment, binary.LittleEndian, record.Header); err != nil {
+		return 0, errors.NewStorageError(
+			err, errors.ErrRecordHeaderWriteFailed, "Failed to write record header",
+		).
+			WithDetail("header", record.Header).
+			WithFileName(s.activeSegment.Name()).
+			WithSegmentID(int(s.activeSegmentID)).
+			WithPath(s.options.SegmentOptions.Directory)
+	}
+
+	bytesWritten, err := s.activeSegment.Write(encoded)
+	if err != nil {
+		return 0, errors.NewStorageError(
+			err, errors.ErrRecordPayloadWriteFailed, "Failed to write record",
+		).
+			WithDetail("record", record).
+			WithFileName(s.activeSegment.Name()).
+			WithSegmentID(int(s.activeSegmentID)).
+			WithPath(s.options.SegmentOptions.Directory)
+	}
+
+	if bytesWritten != len(encoded) {
+		return bytesWritten, errors.NewStorageError(
+			err, errors.ErrIOWriteFailed,
+			fmt.Sprintf(
+				"Short write occurred: %s written, expected %s",
+				options.FormatBytes(uint64(bytesWritten)), options.FormatBytes(uint64(len(encoded))),
+			),
+		).
+			WithFileName(s.activeSegment.Name()).
+			WithSegmentID(int(s.activeSegmentID)).
+			WithDetail("bytesWritten", bytesWritten).
+			WithDetail("encodedLength", len(encoded)).
+			WithPath(s.options.SegmentOptions.Directory)
+	}
+
+	s.log.Infow(
+		"Record written successfully",
+		"headerBytes", headerSize,
+		"totalBytes", totalSize,
+		"currentOffset", s.currentOffset,
+	)
+
+	return totalSize, nil
 }

@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/iamNilotpal/ignite/pkg/filesys"
 )
@@ -88,6 +89,46 @@ func ParseSegmentID(fullPath, prefix string) (uint16, error) {
 	}
 
 	return uint16(id), nil
+}
+
+// GenerateName creates a properly formatted filename for a new segment file.
+func GenerateName(id uint16, prefix string) string {
+	return GenerateNameWithTimestamp(id, prefix, time.Now().UnixNano())
+}
+
+// GenerateNameWithTimestamp creates a properly formatted filename using a specific timestamp.
+func GenerateNameWithTimestamp(id uint16, prefix string, timestamp int64) string {
+	if prefix == "" {
+		return fmt.Sprintf("INVALID_PREFIX_%05d_%d.seg", id, timestamp)
+	}
+	return fmt.Sprintf("%s_%05d_%d.seg", prefix, id, timestamp)
+}
+
+// ParseSegmentTimestamp extracts the timestamp from a segment filename.
+func ParseSegmentTimestamp(fullPath, prefix string) (int64, error) {
+	_, filename := filepath.Split(fullPath)
+
+	if !strings.HasPrefix(filename, prefix) {
+		return 0, fmt.Errorf("filename %s does not start with expected prefix %s", filename, prefix)
+	}
+
+	// Example: "segment_00001_1678881234567890.seg" -> "00001_1678881234567890"
+	withoutPrefix := strings.TrimPrefix(filename, prefix)
+	withoutExtension := strings.Split(withoutPrefix, ".")[0]
+
+	// Example: "00001_1678881234567890" -> ["", "00001", "1678881234567890"]
+	parts := strings.Split(withoutExtension, "_")
+
+	// We expect: ["", "ID", "timestamp"] (empty first element due to leading underscore).
+	if len(parts) < 3 {
+		return 0, fmt.Errorf("filename %s has unexpected format, expected prefix_ID_timestamp.seg", filename)
+	}
+
+	timestamp, err := strconv.ParseInt(parts[2], 10, 64)
+	if err != nil {
+		return 0, fmt.Errorf("failed to parse segment timestamp '%s' as integer: %w", parts[2], err)
+	}
+	return timestamp, nil
 }
 
 // getFileInfo safely retrieves file system metadata for a given path.

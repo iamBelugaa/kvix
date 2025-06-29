@@ -39,7 +39,7 @@ const (
 	MinSchemaVersion uint8 = 1
 
 	// Represents the current version of the IgniteDB format or schema.
-	CurrentSchemaVersion uint = 1
+	CurrentSchemaVersion uint8 = 1
 
 	// Specifies the maximum supported version of IgniteDB.
 	MaxSchemaVersion uint8 = 255

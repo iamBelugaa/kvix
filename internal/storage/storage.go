@@ -516,8 +516,8 @@ func (s *Storage) prepareRecord(key, value []byte) (*Record, []byte, error) {
 		Key:   key,
 		Value: value,
 		Header: &RecordHeader{
-			Version:   1,
 			Timestamp: time.Now().Unix(),
+			Version:   options.CurrentSchemaVersion,
 		},
 	}
 

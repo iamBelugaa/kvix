@@ -1,10 +1,10 @@
-package ignite
+package kvix
 
 import (
 	"fmt"
 
-	"github.com/iamNilotpal/ignite/pkg/errors"
-	"github.com/iamNilotpal/ignite/pkg/options"
+	"github.com/iamBelugaa/kvix/pkg/errors"
+	"github.com/iamBelugaa/kvix/pkg/options"
 )
 
 func isValidKey(key []byte) error {

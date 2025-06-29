@@ -1,8 +1,8 @@
-# IgniteDB
+# Kvix
 
 A key-value storage engine inspired by Bitcask architecture, designed for
-applications. IgniteDB combines an in-memory index with append-only file storage
-to deliver predictable O(1) performance.
+applications. Kvix combines an in-memory index with append-only file storage to
+deliver predictable O(1) performance.
 
 ## Core Components
 
@@ -170,7 +170,7 @@ func WithCompactInterval(interval time.Duration) OptionFunc
 
 #### Directory Structure
 
-- **Base data directory**: `/var/lib/ignitedb` (default)
+- **Base data directory**: `/var/lib/kvix` (default)
 - **Segment subdirectory**: Configurable within base directory
 - **Filename format**: `{prefix}_{segmentID}_{timestamp}.seg`
 
@@ -191,12 +191,12 @@ import (
     "fmt"
     "time"
 
-    "github.com/iamNilotpal/ignite/pkg/ignite"
-    "github.com/iamNilotpal/ignite/pkg/errors"
+    "github.com/iamBelugaa/kvix/pkg/kvix"
+    "github.com/iamBelugaa/kvix/pkg/errors"
 )
 
 type SessionStore struct {
-    db *ignite.Instance
+    db *kvix.Instance
 }
 
 type SessionData struct {
@@ -208,10 +208,10 @@ type SessionData struct {
 }
 
 func NewSessionStore(dataDir string) (*SessionStore, error) {
-    db, err := ignite.NewInstance(context.Background(), "session-store",
-        ignite.WithDataDir(dataDir),
-        ignite.WithSegmentPrefix("sessions"),
-        ignite.WithSegmentSize(1024*1024*1024), // 1GB segments
+    db, err := kvix.NewInstance(context.Background(), "session-store",
+        kvix.WithDataDir(dataDir),
+        kvix.WithSegmentPrefix("sessions"),
+        kvix.WithSegmentSize(1024*1024*1024), // 1GB segments
     )
     if err != nil {
         return nil, fmt.Errorf("failed to initialize session store: %w", err)

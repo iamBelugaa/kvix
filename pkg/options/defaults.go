@@ -3,8 +3,8 @@ package options
 import "time"
 
 const (
-	// Specifies the default base directory where IgniteDB will store its data files.
-	DefaultDataDir string = "/var/lib/ignitedb"
+	// Specifies the default base directory where Kvix will store its data files.
+	DefaultDataDir string = "/var/lib/kvix"
 
 	// Defines the default time duration between automatic compaction operations.
 	DefaultCompactInterval = time.Hour * 5
@@ -35,17 +35,17 @@ const (
 	// Maximum allowed size for a record value in bytes (100MB).
 	MaxValueSize uint32 = 100 * 1024 * 1024
 
-	// Specifies the minimum supported version of IgniteDB required for compatibility.
+	// Specifies the minimum supported version of Kvix required for compatibility.
 	MinSchemaVersion uint8 = 1
 
-	// Represents the current version of the IgniteDB format or schema.
+	// Represents the current version of the Kvix format or schema.
 	CurrentSchemaVersion uint8 = 1
 
-	// Specifies the maximum supported version of IgniteDB.
+	// Specifies the maximum supported version of Kvix.
 	MaxSchemaVersion uint8 = 255
 )
 
-// Holds the default configuration settings for an IgniteDB instance.
+// Holds the default configuration settings for an Kvix instance.
 var defaultOptions = Options{
 	DataDir:         DefaultDataDir,
 	CompactInterval: DefaultCompactInterval,

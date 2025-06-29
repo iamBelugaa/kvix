@@ -1,4 +1,4 @@
-// Package engine provides the core database engine implementation for the Ignite storage system.
+// Package engine provides the core database engine implementation for the Kvix storage system.
 package engine
 
 import (
@@ -10,11 +10,11 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/iamNilotpal/ignite/internal/compaction"
-	"github.com/iamNilotpal/ignite/internal/index"
-	"github.com/iamNilotpal/ignite/internal/storage"
-	"github.com/iamNilotpal/ignite/pkg/errors"
-	"github.com/iamNilotpal/ignite/pkg/options"
+	"github.com/iamBelugaa/kvix/internal/compaction"
+	"github.com/iamBelugaa/kvix/internal/index"
+	"github.com/iamBelugaa/kvix/internal/storage"
+	"github.com/iamBelugaa/kvix/pkg/errors"
+	"github.com/iamBelugaa/kvix/pkg/options"
 )
 
 var (

@@ -1,4 +1,4 @@
-// Package index provides the in-memory hash table implementation for the ignite key-value store.
+// Package index provides the in-memory hash table implementation for the kvix key-value store.
 // The index enables O(1) key lookups through an in-memory hash table while keeping
 // storage overhead minimal.
 package index

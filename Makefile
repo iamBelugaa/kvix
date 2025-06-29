@@ -1,5 +1,5 @@
-BINARY_NAME := ignite
-MAIN_PACKAGE ?= ./cmd/ignited/main.go
+BINARY_NAME := kvix
+MAIN_PACKAGE ?= ./cmd/kvixd/main.go
 
 BUILD_DIR := dist
 EXTRA_BUILD_FLAGS ?=
@@ -7,7 +7,7 @@ BUILD_FLAGS := -v -ldflags="-s -w"
 
 PROTO_DIR := pkg/proto
 PROTO_OUT_DIR := internal/storage/__proto__
-MODULE_PATH := github.com/iamNilotpal/ignite
+MODULE_PATH := github.com/iamBelugaa/kvix
 
 # ANSI Color Codes
 GREEN := \033[32m

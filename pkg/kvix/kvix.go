@@ -1,5 +1,5 @@
-// Package ignite provides a key-value data store designed for fast read and write operations.
-package ignite
+// Package kvix provides a key-value data store designed for fast read and write operations.
+package kvix
 
 import (
 	"context"
@@ -7,20 +7,20 @@ import (
 	"sync"
 	"time"
 
-	"github.com/iamNilotpal/ignite/internal/engine"
-	"github.com/iamNilotpal/ignite/internal/storage"
-	"github.com/iamNilotpal/ignite/pkg/logger"
-	"github.com/iamNilotpal/ignite/pkg/options"
+	"github.com/iamBelugaa/kvix/internal/engine"
+	"github.com/iamBelugaa/kvix/internal/storage"
+	"github.com/iamBelugaa/kvix/pkg/logger"
+	"github.com/iamBelugaa/kvix/pkg/options"
 )
 
-// Instance represents a complete Ignite key-value database instance.
+// Instance represents a complete Kvix key-value database instance.
 type Instance struct {
 	mu      sync.RWMutex
 	engine  *engine.Engine
 	options *options.Options
 }
 
-// NewInstance creates and initializes a new Ignite database instance with the specified configuration.
+// NewInstance creates and initializes a new Kvix database instance with the specified configuration.
 func NewInstance(context context.Context, service string, opts ...options.OptionFunc) (*Instance, error) {
 	log := logger.New(service)
 
@@ -37,7 +37,7 @@ func NewInstance(context context.Context, service string, opts ...options.Option
 	}
 
 	log.Infow(
-		"Ignite database instance initialized successfully",
+		"Kvix database instance initialized successfully",
 		"service", service,
 		"dataDir", defaultOpts.DataDir,
 		"maxSegmentSize", defaultOpts.SegmentOptions.Size,
@@ -115,7 +115,7 @@ func (i *Instance) Delete(context context.Context, key []byte) (bool, error) {
 	return i.engine.Delete(context, key)
 }
 
-// Close gracefully shuts down the Ignite database instance.
+// Close gracefully shuts down the Kvix database instance.
 func (i *Instance) Close() error {
 	i.mu.Lock()
 	defer i.mu.Unlock()

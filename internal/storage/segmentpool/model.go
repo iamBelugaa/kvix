@@ -4,7 +4,7 @@ import (
 	"os"
 	"sync"
 
-	"github.com/iamNilotpal/ignite/pkg/options"
+	"github.com/iamBelugaa/kvix/pkg/options"
 	"go.uber.org/zap"
 )
 

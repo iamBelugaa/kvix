@@ -1,4 +1,4 @@
-module github.com/iamNilotpal/ignite
+module github.com/iamBelugaa/kvix
 
 go 1.24.2
 

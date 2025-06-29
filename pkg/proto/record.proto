@@ -1,9 +1,9 @@
 syntax = "proto3";
 
-package ignitedb.storage.v1;
+package kvix.storage.v1;
 
 // Go package path for generated code.
-option go_package = "github.com/iamNilotpal/ignite;ignitepb";
+option go_package = "github.com/iamBelugaa/kvix;kvixpb";
 
 // Record represents a complete key-value entry as it exists in our storage system.
 message Record {

@@ -5,12 +5,12 @@ import (
 	"encoding/json"
 	"log"
 
-	"github.com/iamNilotpal/ignite/pkg/errors"
-	"github.com/iamNilotpal/ignite/pkg/ignite"
+	"github.com/iamBelugaa/kvix/pkg/errors"
+	"github.com/iamBelugaa/kvix/pkg/kvix"
 )
 
 func main() {
-	cache, err := ignite.NewInstance(context.Background(), "ignite")
+	cache, err := kvix.NewInstance(context.Background(), "kvix")
 	if err != nil {
 		log.Fatalf("instance create error : %#v \n", err)
 	}

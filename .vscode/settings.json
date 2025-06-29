@@ -1,6 +1,7 @@
 {
   "cSpell.words": [
     "backpressure",
+    "Belugaa",
     "Bitcask",
     "bursty",
     "checksummer",
@@ -16,10 +17,12 @@
     "GOCACHE",
     "GOPATH",
     "gotypes",
-    "ignitedb",
-    "ignitepb",
     "Infow",
+    "kvix",
+    "kvixd",
+    "kvixpb",
     "libprotoc",
+    "multierr",
     "mydir",
     "netgo",
     "Nilotpal",

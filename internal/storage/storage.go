@@ -15,12 +15,12 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/iamNilotpal/ignite/internal/storage/segmentpool"
-	"github.com/iamNilotpal/ignite/pkg/checksum"
-	"github.com/iamNilotpal/ignite/pkg/errors"
-	"github.com/iamNilotpal/ignite/pkg/filesys"
-	"github.com/iamNilotpal/ignite/pkg/options"
-	"github.com/iamNilotpal/ignite/pkg/seginfo"
+	"github.com/iamBelugaa/kvix/internal/storage/segmentpool"
+	"github.com/iamBelugaa/kvix/pkg/checksum"
+	"github.com/iamBelugaa/kvix/pkg/errors"
+	"github.com/iamBelugaa/kvix/pkg/filesys"
+	"github.com/iamBelugaa/kvix/pkg/options"
+	"github.com/iamBelugaa/kvix/pkg/seginfo"
 )
 
 // New creates and initializes a new Storage instance.

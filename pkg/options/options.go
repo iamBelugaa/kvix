@@ -1,4 +1,4 @@
-// Package options provides data structures and functions for configuring the Ignite database.
+// Package options provides data structures and functions for configuring the Kvix database.
 package options
 
 import (
@@ -19,7 +19,7 @@ type SegmentOptions struct {
 
 	// Specifies where segment files are stored.
 	//
-	// Default: "/var/lib/ignitedb/segments"
+	// Default: "/var/lib/kvix/segments"
 	Directory string `json:"directory"`
 
 	// Defines the filename prefix for segment files.
@@ -31,11 +31,11 @@ type SegmentOptions struct {
 	Prefix string `json:"prefix"`
 }
 
-// Defines the configuration parameters for Ignite DB.
+// Defines the configuration parameters for Kvix.
 type Options struct {
 	// Specifies the base path where files will be stored.
 	//
-	// Default: "/var/lib/ignitedb"
+	// Default: "/var/lib/kvix"
 	DataDir string `json:"dataDir"`
 
 	// Defines how often the compaction process runs to  merge old segments.
@@ -59,7 +59,7 @@ func WithDefaultOptions() OptionFunc {
 	}
 }
 
-// Sets the primary data directory for Ignite.
+// Sets the primary data directory for Kvix.
 func WithDataDir(directory string) OptionFunc {
 	return func(o *Options) {
 		directory = strings.TrimSpace(directory)
@@ -69,7 +69,7 @@ func WithDataDir(directory string) OptionFunc {
 	}
 }
 
-// Sets the interval at which Ignite performs compaction operations.
+// Sets the interval at which Kvix performs compaction operations.
 func WithCompactInterval(interval time.Duration) OptionFunc {
 	return func(o *Options) {
 		if interval > DefaultCompactInterval {

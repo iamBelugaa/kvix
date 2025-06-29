@@ -7,10 +7,10 @@ import (
 	"go.uber.org/zap"
 	"google.golang.org/protobuf/proto"
 
-	ignitepb "github.com/iamNilotpal/ignite/internal/storage/__proto__"
-	"github.com/iamNilotpal/ignite/internal/storage/segmentpool"
-	"github.com/iamNilotpal/ignite/pkg/checksum"
-	"github.com/iamNilotpal/ignite/pkg/options"
+	kvixpb "github.com/iamBelugaa/kvix/internal/storage/__proto__"
+	"github.com/iamBelugaa/kvix/internal/storage/segmentpool"
+	"github.com/iamBelugaa/kvix/pkg/checksum"
+	"github.com/iamBelugaa/kvix/pkg/options"
 )
 
 var (
@@ -56,7 +56,7 @@ type RecordHeader struct {
 
 // Serializes a record to its Protocol Buffer representation.
 func (r *Record) MarshalProto() ([]byte, error) {
-	record := ignitepb.Record{
+	record := kvixpb.Record{
 		Key:   r.Key,
 		Value: r.Value,
 	}
@@ -66,7 +66,7 @@ func (r *Record) MarshalProto() ([]byte, error) {
 
 // Deserializes a record from its Protocol Buffer representation.
 func (r *Record) UnMarshalProto(data []byte) error {
-	var record ignitepb.Record
+	var record kvixpb.Record
 	opts := proto.UnmarshalOptions{DiscardUnknown: true}
 
 	if err := opts.Unmarshal(data, &record); err != nil {

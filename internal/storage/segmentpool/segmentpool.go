@@ -6,9 +6,9 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/iamNilotpal/ignite/pkg/errors"
-	"github.com/iamNilotpal/ignite/pkg/options"
-	"github.com/iamNilotpal/ignite/pkg/seginfo"
+	"github.com/iamBelugaa/kvix/pkg/errors"
+	"github.com/iamBelugaa/kvix/pkg/options"
+	"github.com/iamBelugaa/kvix/pkg/seginfo"
 	"go.uber.org/zap"
 )
 
